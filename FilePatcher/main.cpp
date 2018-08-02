@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 using namespace std;
 
@@ -7,24 +8,18 @@ using namespace std;
 #define getBits(x) (INRANGE((x & (~0x20)), 'A', 'F') ? ((x & (~0x20)) - 'A' + 0xA): (INRANGE(x, '0', '9') ? x - '0': 0))
 #define getByte(x) (getBits(x[0]) << 4 | getBits(x[1]))
 
-DWORD FindPattern(HANDLE hFile, const char* targetPattern)
+DWORD FindPattern(unsigned char* buffer, DWORD fileSize, const char* targetPattern)
 {
-	/*const char* pattern = targetPattern;
+	const char* pattern = targetPattern;
 
 	uintptr_t firstMatch = 0;
-	DWORD fileSize = GetFileSize(hFile, NULL);
 
-	LPDWORD read;
-
-	for (uintptr_t position = 0; position < fileSize; position++) {
+	for (size_t position = 0; position < fileSize; position++) {
 		if (!*pattern)
 			return firstMatch;
-
-		void* buffer;
 		
-		ReadFile(hFile, buffer, 1, read, position)
 		const uint8_t patternCurrent = *reinterpret_cast<const uint8_t*>(pattern);
-		const uint8_t memoryCurrent = *reinterpret_cast<const uint8_t*>(position);
+		const uint8_t memoryCurrent = *reinterpret_cast<const uint8_t*>(buffer[position]);
 
 		if (patternCurrent == '\?' || memoryCurrent == getByte(pattern)) {
 			if (!firstMatch)
@@ -39,21 +34,17 @@ DWORD FindPattern(HANDLE hFile, const char* targetPattern)
 			pattern = targetPattern;
 			firstMatch = 0;
 		}
-	}*/
+	}
 
 	return NULL;
 }
 
-void Read(HANDLE hFile, size_t size, DWORD offset)
+void Read(unsigned char* buffer, size_t size, DWORD offset)
 {
-	SetFilePointer(hFile, offset, 0, FILE_BEGIN);
-
-	char* buffer;
-	DWORD read = 0;
-	ReadFile(hFile, &buffer, size, &read, NULL);
-	for (DWORD i = 0; i < read; i++)
+	cout << setfill('0');
+	for (DWORD i = offset; i < offset + size; i++)
 	{
-		cout << buffer << endl;
+		cout << hex << uppercase << setw(2) << int(buffer[i]) << endl;
 	}
 }
 
@@ -67,6 +58,8 @@ int main()
 	BYTE* patchBytes;
 	size_t size = 0;
 	DWORD written = 0;
+	DWORD fileSize = 0;
+	unsigned char* buffer;
 
 	cout << "Insert the filename (must be in this folder):" << endl;
 	getline(cin, fileName);
@@ -82,6 +75,11 @@ int main()
 		system("PAUSE");
 		return -1;
 	}
+	fileSize = GetFileSize(hFile, NULL);
+
+	buffer = (unsigned char*)malloc(fileSize);
+	DWORD read = 0;
+	ReadFile(hFile, buffer, fileSize, &read, NULL);
 
 	cout << "How do you want to patch?" << endl;
 	cout << "1) Offset" << endl;
@@ -128,7 +126,7 @@ int main()
 	cin >> answer;
 	if (answer == 'y')
 	{
-		Read(hFile, size, offset);
+		Read(buffer, size, offset);
 		system("PAUSE");
 		return 0;
 	}
@@ -137,15 +135,16 @@ int main()
 	for (size_t i = 0; i < size; i++)
 	{
 		cout << "Type in byte Number " << i << endl;
-		cin >> hex >> patchBytes[i];
-		Sleep(100);
+		unsigned input = 0;
+		cin >> hex >> input;
+		patchBytes[i] = input;
 	}
 
 	SetFilePointer(hFile, offset, 0, FILE_BEGIN);
 
 	bool result = WriteFile(hFile, patchBytes, sizeof(patchBytes), &written, NULL);
 
-	cout << "Result: " << result << endl;
+	cout << "Result: " << result << ". Bytes written: " << written << endl;
 
 	// close the file handle
 	CloseHandle(hFile);
