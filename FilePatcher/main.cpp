@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 using namespace std;
 
 #define INRANGE(x, a, b) (x >= a && x <= b) 
@@ -10,18 +11,19 @@ using namespace std;
 
 DWORD FindPattern(unsigned char* buffer, DWORD fileSize, string targetPattern)
 {
-	string newPattern = "";
+	vector<unsigned> newPattern;
 	for (size_t i = 0; i < targetPattern.size(); i++) //Remove spaces and convert bytes to char so we can compare with buffer char
 	{
 		if (targetPattern[i] == ' ')
 			continue;
 		if (targetPattern[i] == '?')
 		{
-			newPattern += '?';
+			newPattern.push_back(63);
 			continue;
 		}
 
-		newPattern += (getBits(targetPattern[i]) << 4 | getBits(targetPattern[i + 1]));
+		int f = (getBits(targetPattern[i]) << 4 | getBits(targetPattern[i + 1]));
+		newPattern.push_back(f);
 		i++;
 	}
 
@@ -32,7 +34,7 @@ DWORD FindPattern(unsigned char* buffer, DWORD fileSize, string targetPattern)
 
 	while (pBasePtr < pEndPtr) {
 		for (i = 0; i < sigSize; i++) {
-			if ((newPattern[i] != '?') && (newPattern[i] != pBasePtr[i]))
+			if ((newPattern[i] != 63) && (newPattern[i] != pBasePtr[i]))
 				break;
 		}
 
@@ -68,7 +70,7 @@ int main()
 	DWORD fileSize = 0;
 	unsigned char* buffer;
 
-	cout << "Insert the filename (must be in this folder):" << endl;
+	cout << "Insert the filename (must be relative to the .exe):" << endl;
 	getline(cin, fileName);
 
 	// file handle
@@ -124,6 +126,8 @@ int main()
 			system("PAUSE");
 			return -1;
 		}
+
+		cout << "Offset: " << hex << uppercase << offset << endl;
 
 		cout << "Offset the address by how much:" << endl;
 		int offoffset = 0;
