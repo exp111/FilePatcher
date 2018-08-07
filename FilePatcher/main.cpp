@@ -57,21 +57,78 @@ void Read(unsigned char* buffer, size_t size, DWORD offset)
 	}
 }
 
-int main()
+struct patchInfo
 {
-	int type = 0;
-	DWORD offset = 0;
-	string signaturePattern;
 	string fileName = "";
+	int type = 0;
+	string signaturePattern = "";
+	int offset = -1;
+	int offoffset = -1;
+	size_t patchSize = 0;
+	BYTE* patchBytes = nullptr;
+	int readOnly = -1;
+};
+
+patchInfo getArguments(int argc, char* argv[])
+{
+	patchInfo info;
+	if (argc == 1)
+		return info;
+
+	info.fileName = argv[1];
+	info.type = stoi(argv[2]);
+	int index = 4;
+	if (info.type == 1) //offset
+	{
+		info.offset = stoi(argv[3], 0, 16);
+	}
+	else //sig
+	{
+		info.signaturePattern = argv[3];
+		info.offoffset = stoi(argv[4], 0, 16);
+		index++;
+	}
+	
+	info.patchSize = stoi(argv[index]);
+	index++;
+	info.readOnly = stoi(argv[index]);
+	if (info.readOnly)
+		return info;
+	info.patchBytes = (unsigned char*)malloc(info.patchSize);
+	for (int i = 0; i < info.patchSize; i++)
+	{
+		info.patchBytes[i] = stoi(argv[index + i], 0, 16);
+	}
+	return info;
+}
+
+//.exe filename type offset/sig offoffset patchSize readOnly patchBytes
+//.exe filename 1 400 2 0 90 90
+//.exe filename 2 "0F 84 ? ? ? ?" 0 6 0 90 90 90 90 90 90
+int main(int argc, char* argv[])
+{
+	patchInfo info = getArguments(argc, argv);
+	int type = info.type;
+	int offset = info.offset;
+	string signaturePattern = info.signaturePattern;
+	string fileName = info.fileName;
+	BYTE* patchBytes = info.patchBytes;
+	size_t size = info.patchSize;
+	int offoffset = info.offoffset;
+	int readOnly = info.readOnly;
+
 	HANDLE hFile;
-	BYTE* patchBytes;
-	size_t size = 0;
+
+	unsigned char* buffer;
 	DWORD written = 0;
 	DWORD fileSize = 0;
-	unsigned char* buffer;
+	
 
-	cout << "Insert the filename (must be relative to the .exe):" << endl;
-	getline(cin, fileName);
+	if (fileName.size() == 0)
+	{
+		cout << "Insert the filename (must be relative to the .exe):" << endl;
+		getline(cin, fileName);
+	}
 
 	// file handle
 	hFile = INVALID_HANDLE_VALUE;
@@ -90,10 +147,13 @@ int main()
 	DWORD read = 0;
 	ReadFile(hFile, buffer, fileSize, &read, NULL);
 
-	cout << "How do you want to patch?" << endl;
-	cout << "1) Offset" << endl;
-	cout << "2) Signature" << endl;
-	cin >> type;
+	if (type == 0)
+	{
+		cout << "How do you want to patch?" << endl;
+		cout << "1) Offset" << endl;
+		cout << "2) Signature" << endl;
+		cin >> type;
+	}
 	if (type < 1 || type > 3)
 	{
 		cout << "You had one job. How could you fuck this up?" << endl;
@@ -102,25 +162,28 @@ int main()
 	}
 
 	//Get Offset/SigPattern
-	cout << "Type in the " << (type == 1 ? "Offset (as hex)" : "Pattern (IDA Style)") << ":" << endl;
-	switch (type)
+	if (offset == -1 && signaturePattern.size() == 0)
 	{
-	case 1:
-		cin >> hex >> offset;
-		break;
-	case 2:
-		cin.ignore();
-		getline(cin, signaturePattern);
-		break;
-	default:
-		break;
+		cout << "Type in the " << (type == 1 ? "Offset (as hex)" : "Pattern (IDA Style)") << ":" << endl;
+		switch (type)
+		{
+		case 1:
+			cin >> hex >> offset;
+			break;
+		case 2:
+			cin.ignore();
+			getline(cin, signaturePattern);
+			break;
+		default:
+			break;
+		}
 	}
 
 	if (type == 2) //Check the signature -> get offset
 	{
 		offset = FindPattern(buffer, fileSize, signaturePattern);
 
-		if (offset == 0)
+		if (offset == -1)
 		{
 			cout << "Couldn't find the pattern." << endl;
 			system("PAUSE");
@@ -129,32 +192,45 @@ int main()
 
 		cout << "Offset: " << hex << uppercase << offset << endl;
 
-		cout << "Offset the address by how much:" << endl;
-		int offoffset = 0;
-		cin >> offoffset;
+		if (offoffset == -1)
+		{
+			cout << "Offset the address by how much (in hex):" << endl;
+			cin >> offoffset;
+		}
 		offset += offoffset;
 	}
 
-	cout << "Type in how many bytes you want to patch:" << endl;
-	cin >> size;
+	if (size == 0)
+	{
+		cout << "Type in how many bytes you want to patch:" << endl;
+		cin >> size;
+	}
 	
-	cout << "Do you want to read only? (y/n)" << endl;
-	char answer;
-	cin >> answer;
-	if (answer == 'y')
+	if (readOnly == -1)
+	{
+		cout << "Do you want to read only? (y/n)" << endl;
+		char answer;
+		cin >> answer;
+		if (answer == 'y')
+			readOnly = true;
+	}
+	if (readOnly)
 	{
 		Read(buffer, size, offset);
 		system("PAUSE");
 		return 0;
 	}
 
-	patchBytes = (BYTE*)malloc(size);
-	for (size_t i = 0; i < size; i++)
+	if (patchBytes == nullptr)
 	{
-		cout << "Type in byte Number " << i << endl;
-		unsigned input = 0;
-		cin >> hex >> input;
-		patchBytes[i] = input;
+		patchBytes = (BYTE*)malloc(size);
+		for (size_t i = 0; i < size; i++)
+		{
+			cout << "Type in byte Number " << i << endl;
+			unsigned input = 0;
+			cin >> hex >> input;
+			patchBytes[i] = input;
+		}
 	}
 
 	SetFilePointer(hFile, offset, 0, FILE_BEGIN);
