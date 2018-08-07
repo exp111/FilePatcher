@@ -29,6 +29,6 @@ If active prints the amount of bytes at the address
 The Bytes that are written (in hex)
 #### Examples:
  - **Offset:**
-FilePatcher.exe patch.dll 400 2 0 90 90
+FilePatcher.exe patch.dll 400 2 0 90 90 (Patch 2 Bytes at the address 0x400 in the file patch.dll to 90 90 (nop))
 - **Signature:**
-FilePatcher.exe patch.dll "0F 84 ? ? ? ?" 2 4 0 90 90 90 90
+FilePatcher.exe patch.dll "0F 84 ? ? ? ?" 2 4 0 90 90 90 90 (Patch 4 Bytes at the address found with the Signature "0F 84 ? ? ? ?" offsetted by 2 to 90 90 90 90 (nop))
